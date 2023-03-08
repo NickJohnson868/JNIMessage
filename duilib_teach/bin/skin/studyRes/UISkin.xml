@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<Window size="1000,500" caption="0,0,0,30" roundcorner="25,25" >
+	<VerticalLayout width="1000" height="500" bkcolor="#FFFFFBF0" bkimage="C:\Users\62453\Pictures\back.jpg" >
+		<HorizontalLayout width="1000" height="20" bkcolor="#FF00FF00" borderround="0,0" >
+			<Control width="950" height="30" />
+			<Button name="btnClose" text="X" width="30" height="20" bkcolor="#FF008067" textcolor="#00FF00FF" disabledtextcolor="#FFA7A6AA" normalimage="C:\Users\62453\Desktop\find.png" />
+		</HorizontalLayout>
+		<HorizontalLayout width="1000" height="100" >
+			<Option float="true" pos="100,57,0,0" width="40" height="40" bkcolor="#FFFF00FF" textcolor="#FF000000" disabledtextcolor="#FFA7A6AA" align="center" />
+			<CheckBox name="m_check" width="20" height="20" pos="184,71,204,91" float="true" bkcolor="0xFFFFFFFF" />
+		</HorizontalLayout>
+		<HorizontalLayout width="1000" height="100" >
+			<Text name="m_time" text="测试数据" bordersize="1" width="1000" height="100" textpadding="2,0,2,0" textcolor="#FFFFFFFF" disabledtextcolor="#FFA7A6AA" align="centerwrap" />
+		</HorizontalLayout>
+	</VerticalLayout>
+</Window>

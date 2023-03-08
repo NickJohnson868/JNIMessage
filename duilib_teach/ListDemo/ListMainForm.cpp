@@ -1,0 +1,667 @@
+#include "StdAfx.h"
+#include "ListMainForm.h"
+#include "MenuWnd.h"
+
+#include <objbase.h>   //思考此处为何把#include分段  #回答#：""优先导入自定义的头文件
+#include <zmouse.h>
+#include <exdisp.h>
+#include <comdef.h>
+#include <vector>
+#include <sstream>
+#include <atlstr.h>
+#include <atltime.h>
+#define _USE_MATH_DEFINES
+#include <math.h>
+
+
+using namespace DuiLib;
+
+#define TIMER_ID_TEST 100
+#define TIMER_TIME_TEST 1000
+
+/*
+* 存放第二列数据
+*/
+std::vector<std::string> domain;
+
+/*
+* 存放第三列数据
+*/
+std::vector<std::string> desc;
+
+/**
+初始化UI控件
+*/
+void ListMainForm::Init()
+{
+	m_pCloseBtn = static_cast<CButtonUI*>(m_pm.FindControl(_T("closebtn")));
+	//static_cast 强制类型转换，_T 可以搜索文档16.2小节
+
+	CTime tm;
+	tm = CTime::GetCurrentTime();
+	//MessageBox(NULL, tm.Format("现在时间是%Y-%m-%d %X"), _T(""), NULL);
+
+	m_pMaxBtn = static_cast<CButtonUI*>(m_pm.FindControl(_T("maxbtn")));
+	m_pRestoreBtn = static_cast<CButtonUI*>(m_pm.FindControl(_T("restorebtn")));
+	m_pMinBtn = static_cast<CButtonUI*>(m_pm.FindControl(_T("minbtn")));
+	m_pSearch = static_cast<CButtonUI*>(m_pm.FindControl(_T("btn_search")));
+}
+
+/**
+*这是一个全局测试函数，不属于ListMainForm类。
+*一个类里面的函数应该和类密切相关，不相干的函数需要抽出到其他类或者Utils中
+*
+*/
+void TestMemoryFunc()
+{
+	int* array = new int[10]; //使用vs提供的内存查看工具可以得知 数组的内存是连续的，可以通过memset来统一初始化内存
+	memset(array, 0x0F, sizeof(int) * 10);
+
+
+	char chInput[512];
+	sprintf(chInput, "int:%d\n", array[0]);//手动修改内存， 请将array中的第一个数字大小修改为15，
+	DUITRACE(_T("array---[0]: %s"), chInput);//注意用此方法可以输出信息到vs的调试窗口中
+
+	//OutputDebugString(chInput);
+
+	//TestMem* m;
+	//for (int i = 0; i < 190464; i++) {
+	//	m =new  TestMem;
+	//	m->count = 15;
+	//}
+}
+
+DWORD WINAPI ListMainForm::Search(LPVOID lpParameter)
+{
+	TestMemoryFunc();
+
+	try
+	{
+		struct Prama* prama = (struct Prama *)lpParameter;//指针类型转换，从void* 转换为目标指针类型
+		CListUI* pList = prama->pList;
+		CButtonUI* pSearch = prama->pSearch;
+		CDuiString tDomain = prama->tDomain;
+		//-------------------------------------
+		/*
+		* 添加数据循环
+		*/
+		for (int i = 0; i < 10; i++)
+		{
+			std::stringstream ss;//使用stringstream方便字符串拼接 
+			ss << "www." << i << ".com";
+			domain.push_back(ss.str());
+
+			ss.clear();
+			ss << "it's " << i;
+			desc.push_back(ss.str());
+			CListTextElementUI* pListElement = new CListTextElementUI;
+			pListElement->SetTag(i);
+			if (pListElement != NULL)
+			{
+				::PostMessage(prama->hWnd, WM_ADDLISTITEM, 0L, (LPARAM)pListElement);
+			}
+			/*
+			*	Sleep 为了展示添加的动态效果，故放慢了添加速度，同时可以看到添加过程中界面仍然可以响应
+			*/
+			::Sleep(100);
+		}
+
+		delete prama;//一定要删除这个变量，否则会造成内存泄漏，new Prama 和 delete 要成对出现
+
+		pSearch->SetEnabled(true);
+		return 0;
+	}
+	catch (...)
+	{
+		return 0;
+	}
+}
+
+wstring string2wstring(const string& s)
+{
+	_bstr_t t = s.c_str();
+	wchar_t* pwchar = (wchar_t*)t;
+	wstring result = pwchar;
+	return result;
+}
+void ListMainForm::sendMsg()
+{
+	// 接收消息进程名
+	CString strOtherWndTitle = _T("WMListener Listener");
+	// 发送数据
+	wstring strSendData = string2wstring(_T("来自ListDemo的消息"));
+	// 获取接收消息进程句柄
+	HWND hOtherWnd = ::FindWindow(NULL, strOtherWndTitle.GetBuffer(0));
+	if (hOtherWnd != NULL && ::IsWindow(hOtherWnd))
+	{
+		COPYDATASTRUCT cdsSend;
+		cdsSend.dwData = 0;
+		cdsSend.cbData = strSendData.length() * sizeof(wchar_t);
+		cdsSend.lpData = (void*)strSendData.c_str();
+		HRESULT hResult = ::SendMessage(hOtherWnd, WM_COPYDATA, (WPARAM)(GetHWND()), (LPARAM)&cdsSend);
+	}
+	strOtherWndTitle.ReleaseBuffer();
+}
+
+
+DWORD WINAPI ListMainForm::Rotate(LPVOID lpParameter) {
+
+	struct Prama* prama = (struct Prama*)lpParameter;//指针类型转换，从void* 转换为目标指针类型
+	HWND h = prama->hWnd;
+	CListUI* pList = prama->pList;
+	CButtonUI* pSearch = prama->pSearch;
+	CDuiString tDomain = prama->tDomain;
+
+	RECT rctA;
+	::GetWindowRect(h, &rctA);//通过窗口句柄获得窗口的大小存储在rctA结构中
+
+	int left = rctA.left, right = rctA.right, top = rctA.top, bottom = rctA.bottom;
+	int width = right - left;   //窗口的宽度
+	int height = bottom - top;  //窗口的高度
+
+	// 以R为半径旋转
+	int R = 50; 
+	for (int θ = 0; θ <= 360; θ += 3) {
+
+		// θ 是旋转的角度
+		int newTop = R * sin(θ * M_PI / 180.0) + top;
+		int newLeft = left - R * (1 - cos(θ * M_PI / 180.0));
+		MoveWindow(h, newLeft, newTop, width, height, true);
+		Sleep(10);
+	}
+
+	return 0;
+}
+
+void ListMainForm::OnSearch()
+{
+
+	sendMsg();
+
+	////提问： 此处可以如何优化？#回答#：提升作用域，使之成为成员变量，然后在Init函数中初始化
+	//CListUI* pList = static_cast<CListUI*>(m_pm.FindControl(_T("domainlist")));
+	//CEditUI* pEdit = static_cast<CEditUI*>(m_pm.FindControl(_T("input")));
+
+	//pEdit->SetEnabled(false);
+	//CDuiString input = pEdit->GetText();
+
+	//m_pSearch->SetEnabled(false);//提问：此处为何要SetEnabled(false); #回答#：禁用按钮，防止多次重复点击
+	//
+	//pList->RemoveAll();
+	//domain.clear();
+	//domain.resize(0);//提问：resize有什么好处  #回答#：清空在内存中缓存的数据，避免不必要的浪费
+	//desc.clear();
+	//desc.resize(0);
+	//DWORD dwThreadID = 0;
+	//pList->SetTextCallback(this);//[1]
+
+	//struct Prama* prama = new Prama;
+	//prama->hWnd = GetHWND();//给结构体赋值，用结构体传递参数的好处是：当要增加或者删除一个参数的时候可以直接修改结构体
+	//prama->pList = pList;
+	//prama->pSearch = m_pSearch;
+	//prama->tDomain = input;
+
+	////开启线程进入线程执行函数，search,
+	//HANDLE hThread = CreateThread(NULL, 0, &ListMainForm::Search, (LPVOID)prama, 0, &dwThreadID);
+
+	//// 旋转线程
+	//HANDLE hThreadRotate = CreateThread(NULL, 0, &ListMainForm::Rotate, (LPVOID)prama, 0, &dwThreadID);
+
+	//// ListMainForm::Search((LPVOID)prama); // #疑问#：为什么直接调用函数 就没有动态的效果 #猜想#：可能是单线程阻塞了
+	//// 顺便加一句关闭的代码
+	//CloseHandle(hThread);
+	//CloseHandle(hThreadRotate);
+}
+
+/*
+* 关键的回调函数，IListCallbackUI 中的一个虚函数，渲染时候会调用,在[1]中设置了回调对象
+*/
+LPCTSTR  ListMainForm::GetItemText(CControlUI* pControl, int iIndex, int iSubItem)
+{
+	TCHAR szBuf[MAX_PATH] = { 0 };//提问，TCHAR 表示什么数据类型  #回答#：通用字节类型 在宽字节的环境下是wchar_t，窄字节环境下是char
+	switch (iSubItem)
+	{
+	case 0:
+		_stprintf(szBuf, _T("%d"), iIndex);
+		break;
+	case 1:
+	{
+#ifdef _UNICODE		 //当项目配置的字符集配置为unicode的时候此宏定义就会放开
+		int iLen = domain[iIndex].length();
+		LPWSTR lpText = new WCHAR[iLen + 1];
+		::ZeroMemory(lpText, (iLen + 1) * sizeof(WCHAR));
+		::MultiByteToWideChar(CP_ACP, 0, domain[iIndex].c_str(), -1, (LPWSTR)lpText, iLen);
+		_stprintf(szBuf, lpText);
+		delete[] lpText;
+#else
+		_stprintf(szBuf, domain[iIndex].c_str());
+#endif
+	}
+	break;
+	case 2:
+	{
+#ifdef _UNICODE		
+		int iLen = desc[iIndex].length();
+		LPWSTR lpText = new WCHAR[iLen + 1];
+		::ZeroMemory(lpText, (iLen + 1) * sizeof(WCHAR));
+		::MultiByteToWideChar(CP_ACP, 0, desc[iIndex].c_str(), -1, (LPWSTR)lpText, iLen);
+		_stprintf(szBuf, lpText);
+		delete[] lpText;
+#else
+		_stprintf(szBuf, desc[iIndex].c_str());
+#endif
+}
+	break;
+	}
+	pControl->SetUserData(szBuf); // 【1*】
+	return pControl->GetUserData();
+}
+
+void ListMainForm::OnPrepare(TNotifyUI& msg)
+{
+}
+
+/**
+* DUI框架内部定义的消息回调函数，消息体TNotifyUI包括一个消息很自然的一些属性如消息的类型，
+消息的发送者，消息发生的时间，消息发生时候鼠标的位置等等， 可以在此处打上断点，查看dui消息流转顺序
+*/
+void  ListMainForm::Notify(TNotifyUI& msg)
+{
+	if (msg.sType == _T("windowinit"))
+		OnPrepare(msg);
+	else if (msg.sType == _T("click"))
+	{
+		if (msg.pSender->GetName() == _T("btnClose")) // 如果控件名为 btnClose
+		{
+			PostQuitMessage(0);
+		}
+		else if (msg.pSender == m_pCloseBtn)
+		{
+			PostQuitMessage(0);
+			return;
+		}
+		// 最小化
+		else if (msg.pSender == m_pMinBtn)
+		{
+			MessageBox(NULL, _T("小"), _T(""), MB_OK);
+			SendMessage(WM_SYSCOMMAND, SC_MINIMIZE, 0);
+			return;
+		}
+		// 最大化
+		else if (msg.pSender == m_pMaxBtn)
+		{
+			SendMessage(WM_SYSCOMMAND, SC_MAXIMIZE, 0); return;
+		}
+		else if (msg.pSender == m_pRestoreBtn)
+		{
+			SendMessage(WM_SYSCOMMAND, SC_RESTORE, 0); return;
+		}
+		else if (msg.pSender == m_pSearch)
+		{
+			OnSearch();
+		}
+	}
+	else if (msg.sType == _T("setfocus"))
+	{
+	}
+	else if (msg.sType == _T("itemclick"))
+	{
+	}
+	else if (msg.sType == _T("itemactivate"))
+	{
+		int iIndex = msg.pSender->GetTag();
+		CDuiString sMessage = _T("Click: ");;
+#ifdef _UNICODE		  //思考此处宏定义的目的是什么，#回答#：如果是UNICODE编码，则需要将窄字节转换成宽字节
+		int iLen = domain[iIndex].length();
+		LPWSTR lpText = new WCHAR[iLen + 1];
+		::ZeroMemory(lpText, (iLen + 1) * sizeof(WCHAR));
+		::MultiByteToWideChar(CP_ACP, 0, domain[iIndex].c_str(), -1, (LPWSTR)lpText, iLen);
+		sMessage += lpText;
+		delete[] lpText;
+#else
+		sMessage += domain[iIndex].c_str();//此处参详c++运算符重载，代码	CDuiString CDuiString::operator+(LPCTSTR lpStr) const
+
+#endif
+		::MessageBox(this->m_hWnd, sMessage.GetData(), _T("提示(by tojen)"), MB_OK);
+		//
+
+	}
+	else if (msg.sType == _T("menu"))
+	{
+		if (msg.pSender->GetName() != _T("domainlist")) return;
+		CMenuWnd* pMenu = new CMenuWnd();
+		if (pMenu == NULL) { return; }
+		POINT pt = { msg.ptMouse.x, msg.ptMouse.y };
+		::ClientToScreen(*this, &pt);//当前窗口坐标转换为系统坐标，相当于局部坐标系转换为绝对坐标系。
+		pMenu->Init(msg.pSender, pt);
+	}
+	else if (msg.sType == _T("menu_Delete")) {
+		CListUI* pList = static_cast<CListUI*>(msg.pSender);
+		int nSel = pList->GetCurSel();// dui 提供的快捷方法，
+		if (nSel < 0) return;
+		pList->RemoveAt(nSel);
+		domain.erase(domain.begin() + nSel);//请思考此处为何要删除domain内数据
+		// #回答#：如果不删除，界面重新渲染的时候【1*】数据还在，默认把最后一位剔除了
+		desc.erase(desc.begin() + nSel);
+	}
+}
+
+//所有对于UI的操作都必须在UI线程执行，非UI线程操作UI会导致偶发崩溃
+LRESULT ListMainForm::OnAddListItem(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
+{
+	CListTextElementUI* pListElement = (CListTextElementUI*)lParam;
+	CListUI* pList = static_cast<CListUI*>(m_pm.FindControl(_T("domainlist")));
+	if (pList) pList->Add(pListElement);
+	return 0;
+}
+
+/***
+*以下部分代码来自WindowImplBase::OnCreate， 可以了解最原始的窗口建立过程
+*/
+
+LRESULT  ListMainForm::OnCreate(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
+{
+	// 获取窗口的样式
+	LONG styleValue = ::GetWindowLong(*this, GWL_STYLE);
+	styleValue &= ~WS_CAPTION;
+	::SetWindowLong(*this, GWL_STYLE, styleValue | WS_CLIPSIBLINGS | WS_CLIPCHILDREN);
+	//GetLastError()
+	CDialogBuilder builder;
+
+	CDuiString strResourcePath = m_pm.GetResourcePath();
+
+	if (strResourcePath.IsEmpty())
+	{
+		strResourcePath = m_pm.GetInstancePath();
+		strResourcePath += GetSkinFolder().GetData();
+	}
+
+
+	m_pm.SetResourcePath(strResourcePath.GetData());
+
+	m_pm.Init(m_hWnd);
+
+	// 构建窗口
+	CControlUI* pRoot = builder.Create(GetSkinFile().GetData(), (UINT)0, NULL, &m_pm);
+	
+	ASSERT(pRoot && "Failed to parse XML");
+	m_pm.AttachDialog(pRoot);
+	m_pm.AddNotifier(this);
+
+	Init();
+
+	// 定时器
+	SetTimer(this->m_hWnd, TIMER_ID_TEST, 5000, 0);
+
+	return 0;
+}
+
+
+
+/***
+可以使用内存诊断工具（调试，窗口，显示诊断工具）清晰的看到内存只增不减的情形
+*/
+void ListMainForm::OnTimerTest()
+{
+	void * ptr = malloc(1024 * 1024);
+
+	Sleep(10);//注释以下三句
+	if (ptr)
+		free(ptr);
+}
+
+
+void ListMainForm::OnTimer(WPARAM wParam, LPARAM lParam)
+{
+	switch (wParam)
+	{
+	case TIMER_ID_TEST:
+	{
+		OnTimerTest();
+		break;
+	}
+	default:
+		break;
+	}
+}
+
+CDuiString ListMainForm::GetSkinFolder()
+{
+
+	return _T("skin\\ListRes\\");
+}
+
+
+CDuiString ListMainForm::GetSkinFile()
+{
+	return _T("skin.xml");
+	//return _T("autoLayout.xml");
+	//return _T("demo.xml");
+}
+
+LPCTSTR ListMainForm::GetWindowClassName() const
+{
+	return _T("ScanMainForm");
+};
+
+UINT ListMainForm::GetClassStyle() const
+{
+	return CS_DBLCLKS;
+};
+
+void ListMainForm::OnFinalMessage(HWND /*hWnd*/)
+{
+	delete this;
+};
+
+LRESULT ListMainForm::OnClose(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
+{
+	//注意触发顺序，OnClose OnDestroy OnFinalMessage
+	bHandled = TRUE;
+	ShowWindow(true);
+	return 0;
+}
+
+LRESULT ListMainForm::OnDestroy(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
+{
+	::PostQuitMessage(0L);
+	bHandled = FALSE;
+	return 0;
+}
+
+LRESULT ListMainForm::OnNcActivate(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
+{
+	if (::IsIconic(*this)) bHandled = FALSE;
+	return (wParam == 0) ? TRUE : FALSE;
+}
+
+LRESULT ListMainForm::OnNcCalcSize(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
+{
+	return 0;
+}
+
+LRESULT ListMainForm::OnNcPaint(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
+{
+	return 0;
+}
+
+
+LRESULT  ListMainForm::OnNcHitTest(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
+{
+	POINT pt; pt.x = GET_X_LPARAM(lParam); pt.y = GET_Y_LPARAM(lParam);
+	::ScreenToClient(*this, &pt);
+
+	RECT rcClient;
+	::GetClientRect(*this, &rcClient);
+
+	if (!::IsZoomed(*this)) {
+		RECT rcSizeBox = m_pm.GetSizeBox();
+		if (pt.y < rcClient.top + rcSizeBox.top) {
+			if (pt.x < rcClient.left + rcSizeBox.left)
+			{
+				return HTTOPLEFT;
+			}
+			if (pt.x > rcClient.right - rcSizeBox.right) {
+				return HTTOPRIGHT;
+			}
+			return HTTOP;
+		}
+		else if (pt.y > rcClient.bottom - rcSizeBox.bottom) {
+			if (pt.x < rcClient.left + rcSizeBox.left) {
+				return HTBOTTOMLEFT;
+			}
+			if (pt.x > rcClient.right - rcSizeBox.right) {
+				return HTBOTTOMRIGHT;
+			}
+			return HTBOTTOM;
+		}
+		if (pt.x < rcClient.left + rcSizeBox.left) {
+			return HTLEFT;
+		}
+		if (pt.x > rcClient.right - rcSizeBox.right) {
+			return HTRIGHT;
+		}
+	}
+
+	RECT rcCaption = m_pm.GetCaptionRect();
+	if (pt.x >= rcClient.left + rcCaption.left && pt.x < rcClient.right - rcCaption.right \
+		&& pt.y >= rcCaption.top && pt.y < rcCaption.bottom) {
+		CControlUI* pControl = static_cast<CControlUI*>(m_pm.FindControl(pt));
+		if (pControl && _tcscmp(pControl->GetClass(), DUI_CTR_BUTTON) != 0 &&
+			_tcscmp(pControl->GetClass(), DUI_CTR_OPTION) != 0 &&
+			_tcscmp(pControl->GetClass(), DUI_CTR_TEXT) != 0)
+			return HTCAPTION;
+	}
+
+	return HTCLIENT;
+}
+
+/**
+*大小改变的回调函数，可以尝试注释，修改代码 看效果
+*/
+LRESULT  ListMainForm::OnSize(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
+{
+	SIZE szRoundCorner = m_pm.GetRoundCorner();
+	if (!::IsIconic(*this) && (szRoundCorner.cx != 0 || szRoundCorner.cy != 0)) {
+		CDuiRect rcWnd;
+		::GetWindowRect(*this, &rcWnd);
+		rcWnd.Offset(-rcWnd.left, -rcWnd.top);
+		rcWnd.right++; rcWnd.bottom++;
+		RECT rc = { rcWnd.left, rcWnd.top + szRoundCorner.cx, rcWnd.right, rcWnd.bottom };
+		HRGN hRgn1 = ::CreateRectRgnIndirect(&rc);
+		HRGN hRgn2 = ::CreateRoundRectRgn(rcWnd.left, rcWnd.top, rcWnd.right, rcWnd.bottom - szRoundCorner.cx, szRoundCorner.cx, szRoundCorner.cy);
+		::CombineRgn(hRgn1, hRgn1, hRgn2, RGN_OR);
+		::SetWindowRgn(*this, hRgn1, TRUE);
+		::DeleteObject(hRgn1);
+		::DeleteObject(hRgn2);
+	}
+
+	bHandled = FALSE;
+	return 0;
+}
+
+LRESULT  ListMainForm::OnGetMinMaxInfo(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
+{
+	MONITORINFO oMonitor = {};
+	oMonitor.cbSize = sizeof(oMonitor);
+	::GetMonitorInfo(::MonitorFromWindow(*this, MONITOR_DEFAULTTOPRIMARY), &oMonitor);
+	CDuiRect rcWork = oMonitor.rcWork;
+	rcWork.Offset(-oMonitor.rcMonitor.left, -oMonitor.rcMonitor.top);
+
+	LPMINMAXINFO lpMMI = (LPMINMAXINFO)lParam;
+	lpMMI->ptMaxPosition.x = rcWork.left;
+	lpMMI->ptMaxPosition.y = rcWork.top;
+	lpMMI->ptMaxSize.x = rcWork.right;
+	lpMMI->ptMaxSize.y = rcWork.bottom;
+
+	bHandled = FALSE;
+	return 0;
+}
+
+LRESULT  ListMainForm::OnSysCommand(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
+{
+	// 有时会在收到WM_NCDESTROY后收到wParam为SC_CLOSE的WM_SYSCOMMAND
+	if (wParam == SC_CLOSE) {
+		::PostQuitMessage(0L);
+		bHandled = TRUE;
+		return 0;
+	}
+	BOOL bZoomed = ::IsZoomed(*this);
+	LRESULT lRes = CWindowWnd::HandleMessage(uMsg, wParam, lParam);
+	if (::IsZoomed(*this) != bZoomed) {
+		if (!bZoomed) {
+			CControlUI* pControl = static_cast<CControlUI*>(m_pm.FindControl(_T("maxbtn")));
+			if (pControl) pControl->SetVisible(false);
+			pControl = static_cast<CControlUI*>(m_pm.FindControl(_T("restorebtn")));
+			if (pControl) pControl->SetVisible(true);
+		}
+		else {
+			CControlUI* pControl = static_cast<CControlUI*>(m_pm.FindControl(_T("maxbtn")));
+			if (pControl) pControl->SetVisible(true);
+			pControl = static_cast<CControlUI*>(m_pm.FindControl(_T("restorebtn")));
+			if (pControl) pControl->SetVisible(false);
+		}
+	}
+	return lRes;
+}
+
+/***
+* 处理来着windows系统的各种消息，WM= windows  message
+*/
+string wstring2string(wstring wstr)
+{
+	string result;
+	//获取缓冲区大小，并申请空间，缓冲区大小事按字节计算的  
+	int len = WideCharToMultiByte(CP_ACP, 0, wstr.c_str(), wstr.size(), NULL, 0, NULL, NULL);
+	char* buffer = new char[len + 1];
+	//宽字节编码转换成多字节编码  
+	WideCharToMultiByte(CP_ACP, 0, wstr.c_str(), wstr.size(), buffer, len, NULL, NULL);
+	buffer[len] = '\0';
+	//删除缓冲区并返回值  
+	result.append(buffer);
+	delete[] buffer;
+	return result;
+}
+LRESULT  ListMainForm::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	LRESULT lRes = 0;
+	BOOL bHandled = TRUE;
+	switch (uMsg) {
+	case WM_ADDLISTITEM:   lRes = OnAddListItem(uMsg, wParam, lParam, bHandled); break;
+	case WM_CREATE:        lRes = OnCreate(uMsg, wParam, lParam, bHandled); break;
+	case WM_CLOSE:         lRes = OnClose(uMsg, wParam, lParam, bHandled); break;
+	case WM_DESTROY:       lRes = OnDestroy(uMsg, wParam, lParam, bHandled); break;
+	case WM_NCACTIVATE:    lRes = OnNcActivate(uMsg, wParam, lParam, bHandled); break;
+	case WM_NCCALCSIZE:    lRes = OnNcCalcSize(uMsg, wParam, lParam, bHandled); break;
+	case WM_NCPAINT:       lRes = OnNcPaint(uMsg, wParam, lParam, bHandled); break;
+	case WM_NCHITTEST:     lRes = OnNcHitTest(uMsg, wParam, lParam, bHandled); break;
+	case WM_SIZE:          lRes = OnSize(uMsg, wParam, lParam, bHandled); break;
+	case WM_GETMINMAXINFO: lRes = OnGetMinMaxInfo(uMsg, wParam, lParam, bHandled); break;
+	case WM_SYSCOMMAND:    lRes = OnSysCommand(uMsg, wParam, lParam, bHandled); break;
+	case WM_COPYDATA:
+	{
+		COPYDATASTRUCT* pCopyData = (COPYDATASTRUCT*)lParam;
+		wstring convStr = (LPCWSTR) pCopyData->lpData;
+		MessageBox(GetHWND(), wstring2string(convStr).c_str(), TEXT("接收到消息"), MB_OK);
+		return 0;
+	}
+	case WM_TIMER:
+	{
+		OnTimer(wParam, lParam);
+		break;
+	}
+	default:
+		bHandled = FALSE;
+	}
+	if (bHandled) return lRes;
+	if (m_pm.MessageHandler(uMsg, wParam, lParam, lRes)) return lRes;
+	return CWindowWnd::HandleMessage(uMsg, wParam, lParam);
+}
+
+/****
+提问：
+1.请统计下执行search前后listdemo.exe的内存增长情况（）28
+2.请自己添加一个内存泄漏的代码，在执行serarch之后内存占用超过1M，
+
+
+*/

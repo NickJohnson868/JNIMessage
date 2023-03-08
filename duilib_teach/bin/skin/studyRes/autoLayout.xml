@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<Window size="800,450" caption="0,0,0,32" roundcorner="25,25">
+	<Font name="微软雅黑" id="0" size="12" bold="true" />
+	<!--cef	-->
+	<VerticalLayout>
+		<HorizontalLayout>
+			<CefBrowser name="loginBrowser" visible="true" />
+		</HorizontalLayout>
+	</VerticalLayout>
+</Window>

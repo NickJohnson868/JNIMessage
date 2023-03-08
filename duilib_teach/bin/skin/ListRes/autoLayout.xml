@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<Window size="695,542" roundcorner="25, 25">
+	<VerticalLayout width="800" height="400" bkcolor="#FFA0A0A4">
+		<HorizontalLayout name="title" height="32" bkcolor="#FF63A6F1">
+			<Control pos="0,0,633,33" width="634" height="33" />
+			<Button name="btnClose" text="X" bordersize="1" maxwidth="60" pos="0,0,60,30" width="60" height="32" bkcolor="#FF008067" bkcolor2="#0000C020" textcolor="#FF000000" disabledtextcolor="#FFA7A6AA" />
+		</HorizontalLayout>
+		<HorizontalLayout name="mid" bkcolor="#FFBABABA" />
+		<HorizontalLayout name="status" height="30" bkcolor="#FF808080" />
+	</VerticalLayout>
+</Window>
