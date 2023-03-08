@@ -12,7 +12,7 @@ import static com.sun.jna.platform.win32.WinUser.WM_COPYDATA;
 
 public class WMListener extends Thread {
     private String className = "WMListener Listener";
-    private String toWindowName = "GeoGebra Classic 5 Listener";
+    private String toWindowName = "ListDemo";
     private WinDef.HWND hWnd;
 
     public WMListener() {
